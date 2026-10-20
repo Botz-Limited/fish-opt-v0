@@ -1,0 +1,26 @@
+[project]
+name = "fish-opt"
+version = "0.0.1"
+description = "Onshape -> Gmsh -> SOFA -> Optuna pipeline"
+requires-python = ">=3.12"
+# SOFA (SofaPython3) pochodzi z binarki ~/sofa/SOFA_v26.06.00_Linux, patrz env.sh
+dependencies = [
+    "requests",
+    "python-dotenv",
+    "numpy",
+    "gmsh",
+    "meshio",
+    "trimesh",
+    "optuna",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

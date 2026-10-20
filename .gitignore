@@ -1,0 +1,9 @@
+.env
+runs/
+__pycache__/
+*.egg-info/
+*.db
+.pytest_cache/
+BaseViewer.ini
+lastUsedGUI.ini
+imgui/
