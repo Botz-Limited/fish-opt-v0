@@ -1,6 +1,6 @@
 """Funkcja celu: params -> Onshape STL -> siatka -> SOFA -> koszt. Błąd dowolnego kroku = kara.
 
-Cel: maksymalne ugięcie końca przy stałej sile, pod warunkiem von Mises <= stress_limit_kPa.
+Cel: maksymalne ugięcie końca przy stałej sile, pod warunkiem von Mises <= stress_limit_MPa.
 Koszt = -ugięcie [mm] (minimalizujemy), ograniczenie = vm_max / limit - 1 (<= 0 to wykonalne).
 
 Cache w runs/cache/:
@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 CACHE = Path("runs/cache")
 PENALTY = 1e6
 # Podbij przy każdej zmianie fizyki/solvera w sofa_sim.py: unieważnia stare wyniki w cache.
-SIM_VERSION = 3
+SIM_VERSION = 4  # 4: material silicone -> aluminium, stresses in MPa
 B_MM = 10.0  # szerokość belki, stała w modelu Onshape
 # Te same zakresy co w Configuration w Onshape; sprawdzamy przed wywołaniem API, żeby nie palić budżetu.
 BOUNDS_MM = {"L": (60.0, 120.0), "h": (4.0, 12.0)}
@@ -36,13 +36,15 @@ BBOX_TOL_MM = 0.1
 
 @dataclass(frozen=True)
 class SimConfig:
-    load_N: float = 1e-3
+    # Load and limit scaled together from the silicone version (1 mN, 2 kPa) by 5e4: the limit/load ratio is unchanged,
+    # so the feasible region in (L, h) is the same. Theory gives 66.7 MPa and ~0.7 mm deflection for L=80, h=6.
+    load_N: float = 50.0
     load_steps: int = 5
+    # Deflections < 2% of L, so "small" would give the same result; "large" stays as the safe choice for extreme L/h.
     method: str = "large"
     elements_per_thickness: float = 6.0
-    # Przykładowy limit dopasowany do małej siły 1 mN; teoria daje 1.33 kPa dla L=80, h=6.
-    # Prawdziwa wytrzymałość Ecoflex to ~1 MPa, więc tu limit gra rolę "dopuszczalnego naprężenia projektowego".
-    stress_limit_kPa: float = 2.0
+    # Allowable design stress: Rp0.2 = 276 MPa / safety factor ~2.8.
+    stress_limit_MPa: float = 100.0
     stress_exclude_per_h: float = 0.5  # pomijamy elementy bliżej utwierdzenia niż 0.5*h (osobliwość)
     material: Material = field(default_factory=Material)
 
@@ -98,7 +100,7 @@ def cost_from(result, cfg):
 
 
 def constraint_from(result, cfg):
-    return result["vm_max_kPa"] / cfg.stress_limit_kPa - 1.0
+    return result["vm_max_MPa"] / cfg.stress_limit_MPa - 1.0
 
 
 def evaluate_full(params, cfg=SimConfig(), client=None):
@@ -125,7 +127,7 @@ def evaluate_full(params, cfg=SimConfig(), client=None):
         if not res["converged"]:
             raise RuntimeError(f"Newton nie zbiegł: {res['newton_status']}")
         out.update({k: res[k] for k in ("tip_disp_mm", "max_disp_mm", "mass_kg", "n_tets",
-                                        "vm_max_kPa", "vm_max_raw_kPa")})
+                                        "vm_max_MPa", "vm_max_raw_MPa")})
         out["cost"] = cost_from(res, cfg)
         out["constraint"] = constraint_from(res, cfg)
     except Exception as e:

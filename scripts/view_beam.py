@@ -17,9 +17,9 @@ import Sofa.Simulation
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pipeline.sofa_sim import Material, build_scene, cantilever_analytic  # noqa: E402
 
-DEFAULTS = {"mesh": "runs/phase3/box_1.msh", "method": "large", "deflection_frac": 0.30, "steps": 40,
+DEFAULTS = {"mesh": "runs/phase3/box_1.msh", "method": "large", "deflection_frac": 0.02, "steps": 40,
             "field": "vonmises"}
-FIELD_TITLES = {"vonmises": "von Mises [kPa]", "displacement": "przemieszczenie [mm]"}
+FIELD_TITLES = {"vonmises": "von Mises [MPa]", "displacement": "przemieszczenie [mm]"}
 
 
 class LoadRamp(Sofa.Core.Controller):
@@ -38,7 +38,7 @@ class LoadRamp(Sofa.Core.Controller):
 
     def onAnimateEndEvent(self, _):
         if self.field == "vonmises":
-            values = np.asarray(self.fem.vonMisesPerNode.value) * 1e3  # MPa -> kPa
+            values = np.asarray(self.fem.vonMisesPerNode.value)  # MPa
         else:
             values = np.linalg.norm(np.asarray(self.mo.position.value) - np.asarray(self.mo.rest_position.value),
                                     axis=1)
@@ -49,7 +49,7 @@ class LoadRamp(Sofa.Core.Controller):
         if self.k != getattr(self, "printed", 0):
             self.printed = self.k
             F = self.F_max * self.k / self.steps
-            print(f"krok {self.k}/{self.steps}: F = {F*1e3:.3f} mN, max {FIELD_TITLES[self.field]} = {values.max():.3f}")
+            print(f"krok {self.k}/{self.steps}: F = {F:.2f} N, max {FIELD_TITLES[self.field]} = {values.max():.3f}")
         if self.screenshot and self.k >= self.steps:
             # kilka klatek po ostatnim kroku, żeby GUI zdążyło narysować stan końcowy
             self.frames_after += 1

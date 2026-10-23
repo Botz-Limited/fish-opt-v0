@@ -1,7 +1,7 @@
 """Faza 5: Optuna (TPE z ograniczeniem) nad evaluate_full. Study w SQLite, panel na żywo, wykres końcowy.
 
 Uruchom: source env.sh && python -m pipeline.optimize [--trials 20] [--sampler gp|tpe] [--warm-start]
-                                                     [--no-gui] [--close] [--study beam-v1]
+                                                     [--no-gui] [--close] [--study beam-al-v1]
 Study jest wznawialne: ponowne uruchomienie z tą samą nazwą dokłada próby do istniejących.
 """
 
@@ -31,8 +31,8 @@ class LivePanel:
         if enabled:
             plt.ion()
         self.fig, (self.ax_space, self.ax_hist) = plt.subplots(1, 2, figsize=(16, 8))
-        self.fig.suptitle(f"Faza 5: max ugięcie przy von Mises <= {cfg.stress_limit_kPa:g} kPa "
-                          f"(F = {cfg.load_N*1e3:g} mN)", fontsize=14)
+        self.fig.suptitle(f"Faza 5: max ugięcie przy von Mises <= {cfg.stress_limit_MPa:g} MPa "
+                          f"(F = {cfg.load_N:g} N, aluminium)", fontsize=14)
         if enabled:
             from pipeline.kde_window import place_window_later
             place_window_later(os.getpid(), monitor)
@@ -45,7 +45,7 @@ class LivePanel:
         ax.clear()
         h = np.linspace(*BOUNDS_MM["h"], 200)
         # Granica wg teorii belek: sigma = 6 F L / (b h^2) = limit  ->  L = limit * b * h^2 / (6 F)
-        L_lim = self.cfg.stress_limit_kPa * 1e3 * (B_MM * 1e-3) * (h * 1e-3) ** 2 / (6 * self.cfg.load_N) * 1e3
+        L_lim = self.cfg.stress_limit_MPa * 1e6 * (B_MM * 1e-3) * (h * 1e-3) ** 2 / (6 * self.cfg.load_N) * 1e3
         ax.plot(h, L_lim, "k--", label="granica naprężeń wg teorii")
         ax.fill_between(h, L_lim, BOUNDS_MM["L"][1] + 10, color="red", alpha=0.07)
         for t in trials:
@@ -90,7 +90,7 @@ def theory_points(cfg, lengths=(120.0, 110.0, 100.0), margin=0.95):
     """Punkty startowe z teorii belek: dla danego L grubość h, przy której sigma = 6FL/(bh^2) = margin*limit."""
     pts = []
     for L in lengths:
-        h_m = np.sqrt(6 * cfg.load_N * L * 1e-3 / (B_MM * 1e-3 * cfg.stress_limit_kPa * 1e3 * margin))
+        h_m = np.sqrt(6 * cfg.load_N * L * 1e-3 / (B_MM * 1e-3 * cfg.stress_limit_MPa * 1e6 * margin))
         h = float(np.clip(np.ceil(h_m * 1e3 / STEP_MM["h"]) * STEP_MM["h"], *BOUNDS_MM["h"]))
         pts.append({"L": L, "h": round(h, 1)})
     return pts
@@ -113,7 +113,7 @@ def best_feasible(study):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--trials", type=int, default=20)
-    ap.add_argument("--study", default="beam-v1")
+    ap.add_argument("--study", default="beam-al-v1")  # beam-v1 = old silicone trials
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-gui", action="store_true")
     ap.add_argument("--monitor", default="DP-8")
@@ -139,12 +139,12 @@ def main():
     def objective(trial):
         params = {k: trial.suggest_float(k, *BOUNDS_MM[k], step=STEP_MM[k]) for k in ("L", "h")}
         r = evaluate_full(params, cfg, client)
-        for k in ("tip_disp_mm", "vm_max_kPa", "mass_kg", "api_calls", "cached", "error", "constraint"):
+        for k in ("tip_disp_mm", "vm_max_MPa", "mass_kg", "api_calls", "cached", "error", "constraint"):
             if k in r:
                 trial.set_user_attr(k, r[k])
         status = "OK " if r["constraint"] <= 0 else ("BLAD" if r["error"] else "PRZEKR.")
         print(f"#{trial.number:3d} L={params['L']:6.1f} h={params['h']:5.2f}  "
-              f"ugięcie={r.get('tip_disp_mm', float('nan')):7.3f} mm  vM={r.get('vm_max_kPa', float('nan')):6.3f} kPa  "
+              f"ugięcie={r.get('tip_disp_mm', float('nan')):7.3f} mm  vM={r.get('vm_max_MPa', float('nan')):6.2f} MPa  "
               f"{status:7s} API={r['api_calls']} (razem {client.calls})", flush=True)
         return r["cost"]
 

@@ -13,6 +13,7 @@ dependencies = [
     "trimesh",
     "optuna",
     "matplotlib",
+    "scipy",  # Richardson extrapolation in scripts/03_validate_beam.py
 ]
 
 [project.optional-dependencies]

@@ -28,9 +28,11 @@ PLUGINS = [
 
 @dataclass
 class Material:
-    young_modulus: float = 100e3  # Pa (miękki silikon, rząd Ecoflex 00-30)
-    poisson_ratio: float = 0.45
-    density: float = 1070.0  # kg/m^3
+    # Aluminium EN AW-6061-T6 (catalogue values, not from a material test)
+    young_modulus: float = 69e9  # Pa
+    poisson_ratio: float = 0.33
+    density: float = 2700.0  # kg/m^3
+    yield_strength: float = 276e6  # Pa, Rp0.2; the model is linear elastic, results above this are meaningless
 
 
 class SimulationError(RuntimeError):
@@ -86,9 +88,9 @@ def run_sim(mesh_path, material=None, load_N=1e-4, method="small", load_steps=1,
     """Obciąża końcówkę siłą load_N (w -z) w load_steps równych krokach; każdy krok = 1 animate.
 
     on_step(info) dostaje dict: step, load [N], tip_disp [mm], positions [mm], rest [mm].
-    stress_exclude_mm: pomija elementy bliżej utwierdzenia niż ta odległość przy liczeniu vm_max_kPa
+    stress_exclude_mm: pomija elementy bliżej utwierdzenia niż ta odległość przy liczeniu vm_max_MPa
     (w narożniku utwierdzenia jest osobliwość naprężeń, surowe maksimum rośnie z gęstością siatki).
-    Zwraca dict z wynikami w mm / kg / kPa.
+    Zwraca dict z wynikami w mm / kg / MPa.
     """
     material = material or Material()
     root = Sofa.Core.Node("root")
@@ -124,7 +126,7 @@ def run_sim(mesh_path, material=None, load_N=1e-4, method="small", load_steps=1,
                      "newton_status": statuses[-1]})
 
     disp = np.array(mo.position.value) - rest
-    vm = np.asarray(root.beam.fem.vonMisesPerElement.value) * 1e3  # MPa -> kPa
+    vm = np.asarray(root.beam.fem.vonMisesPerElement.value)  # MPa (scene in mm, N)
     dist_to_clamp = rest[:, 0].max() - rest[tets].mean(axis=1)[:, 0]
     vm_far = vm[dist_to_clamp >= stress_exclude_mm]
     volume = tet_volume(rest, tets) * 1e-9  # mm^3 -> m^3
@@ -133,8 +135,8 @@ def run_sim(mesh_path, material=None, load_N=1e-4, method="small", load_steps=1,
         "tip_disp_mm": history[-1][1],
         "max_disp_mm": float(np.linalg.norm(disp, axis=1).max()),
         "mass_kg": volume * material.density,
-        "vm_max_kPa": float(vm_far.max()) if len(vm_far) else float("nan"),
-        "vm_max_raw_kPa": float(vm.max()),
+        "vm_max_MPa": float(vm_far.max()) if len(vm_far) else float("nan"),
+        "vm_max_raw_MPa": float(vm.max()),
         "volume_m3": volume,
         "n_nodes": len(rest),
         "n_tets": len(tets),

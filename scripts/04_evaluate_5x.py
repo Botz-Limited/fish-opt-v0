@@ -31,13 +31,13 @@ def main():
 
     client = OnshapeClient()
     results = []
-    print(f"{'wywołanie':40s} {'L':>6s} {'h':>5s} {'ugięcie':>9s} {'masa':>7s} {'vM kPa':>7s} {'ogr.':>6s} {'koszt':>9s} {'API':>4s} {'cache':>5s} {'czas':>6s}")
+    print(f"{'wywołanie':40s} {'L':>6s} {'h':>5s} {'ugięcie':>9s} {'masa':>7s} {'vM MPa':>7s} {'ogr.':>6s} {'koszt':>9s} {'API':>4s} {'cache':>5s} {'czas':>6s}")
     for label, params in CALLS:
         r = evaluate_full(params, client=client)
         results.append(r)
         tip = f"{r['tip_disp_mm']:.3f}" if "tip_disp_mm" in r else "-"
         mass = f"{r['mass_kg']*1e3:.2f}g" if "mass_kg" in r else "-"
-        vm = f"{r['vm_max_kPa']:.3f}" if "vm_max_kPa" in r else "-"
+        vm = f"{r['vm_max_MPa']:.2f}" if "vm_max_MPa" in r else "-"
         print(f"{label:40s} {r['params']['L']:6g} {r['params']['h']:5g} {tip:>9s} {mass:>7s} {vm:>7s} {r['constraint']:+6.2f} "
               f"{r['cost']:9.4g} {r['api_calls']:4d} {str(r['cached']):>5s} {r['seconds']:5.1f}s")
         if r["error"]:

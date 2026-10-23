@@ -71,7 +71,7 @@ class Panel:
         ax.clear()
         per_h = [H_MM / r["size_mm"] for r in rows]
         err = [100 * (r["tip_disp_mm"] / target - 1) for r in rows]
-        ax.plot(per_h, err, "o-", label="SOFA P1 tetra, nu=0.45")
+        ax.plot(per_h, err, "o-", label=f"SOFA P1 tetra, nu={Material().poisson_ratio}")
         ax.axhspan(-100 * ACCEPT_ERR, 100 * ACCEPT_ERR, color="green", alpha=0.15, label="+-5%")
         ax.axhline(0, color="k", lw=0.8)
         ax.set_xlabel("elementy na grubość h")
@@ -84,12 +84,12 @@ class Panel:
         ax = self.ax_ramp
         ax.clear()
         F = np.linspace(0, F_max, 50)
-        ax.plot(F * 1e3, analytic_per_N * F * 1e3, "k--", label="teoria liniowa (Timoshenko)")
+        ax.plot(F, analytic_per_N * F * 1e3, "k--", label="teoria liniowa (Timoshenko)")
         for label, hist in curves.items():
             if hist:
                 f, d = zip(*hist)
-                ax.plot(np.array(f) * 1e3, d, "o-", ms=3, label=label)
-        ax.set_xlabel("siła na końcu [mN]")
+                ax.plot(f, d, "o-", ms=3, label=label)
+        ax.set_xlabel("siła na końcu [N]")
         ax.set_ylabel("ugięcie końca [mm]")
         ax.set_title("Rampa siły: małe vs duże ugięcia")
         ax.legend(loc="upper left")
@@ -130,8 +130,8 @@ def main():
 
     box = OUT / "box.stl"
     trimesh.creation.box(extents=[L_MM, B_MM, H_MM]).export(box)
-    log = [f"Belka {L_MM:g} x {B_MM:g} x {H_MM:g} mm, E={mat.young_modulus/1e3:g} kPa, nu={mat.poisson_ratio}",
-           f"Siła mała: {F_small*1e3:.4f} mN -> Timoshenko {target:.4f} mm", ""]
+    log = [f"Belka {L_MM:g} x {B_MM:g} x {H_MM:g} mm, E={mat.young_modulus/1e9:g} GPa, nu={mat.poisson_ratio}",
+           f"Siła mała: {F_small:.3f} N -> Timoshenko {target:.4f} mm", ""]
     panel.text(log)
 
     # Część A: zbieżność siatki
@@ -169,14 +169,16 @@ def main():
         def on_step(s, key=key, method=method):
             curves[key].append((s["load"], s["tip_disp"]))
             panel.ramp(curves, F_big, tim_per_N)
-            panel.shape(s["rest"], s["positions"], f"Rampa {method}: F={s['load']*1e3:.3f} mN", scale=1)
+            panel.shape(s["rest"], s["positions"], f"Rampa {method}: F={s['load']:.0f} N", scale=1)
 
         finals[method] = run_sim(msh, mat, load_N=F_big, method=method, load_steps=RAMP_STEPS, on_step=on_step)
     lin = tim_per_N * F_big * 1e3
-    log += ["", f"Rampa do F={F_big*1e3:.3f} mN (teoria liniowa: {lin:.1f} mm = 30% L):",
+    log += ["", f"Rampa do F={F_big:.0f} N (teoria liniowa: {lin:.1f} mm = 30% L):",
             f"  small: {finals['small']['tip_disp_mm']:.1f} mm, large: {finals['large']['tip_disp_mm']:.1f} mm",
             f"  Newton zbiezny we wszystkich krokach: small={finals['small']['converged']}, large={finals['large']['converged']}",
-            "  large < small: belka się obraca i ramię siły maleje (nieliniowość geometryczna)."]
+            "  large < small: belka się obraca i ramię siły maleje (nieliniowość geometryczna).",
+            f"  Note: beam theory gives sigma = {6*F_big*L/(b*h**2)/1e6:.0f} MPa >> Rp0.2 = {mat.yield_strength/1e6:.0f} MPa;",
+            "  aluminium would yield; this is only a numerical solver check."]
     panel.text(log)
 
     panel.fig.savefig(OUT / "validation.png", dpi=110)
